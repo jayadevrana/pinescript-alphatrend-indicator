@@ -1,0 +1,392 @@
+//@version=5
+indicator('AlphaTrend', shorttitle='AT', overlay=true, format=format.price, precision=2)
+y = input(true,'---------------------AlphaTrend-------------------------')
+
+coeff = input.float(1, 'Multiplier', step=0.1)
+AP = input(14, 'Common Period')
+ATR = ta.sma(ta.tr, AP)
+src = input(close)
+showsignalsk = input(title='Show Signals?', defval=true)
+novolumedata = input(title='Change calculation (no volume data)?', defval=false)
+upT = low - ATR * coeff
+downT = high + ATR * coeff
+AlphaTrend = 0.0
+AlphaTrend := (novolumedata ? ta.rsi(src, AP) >= 50 : ta.mfi(hlc3, AP) >= 50) ? upT < nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : upT : downT > nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : downT
+
+color1 = AlphaTrend > AlphaTrend[2] ? #00E60F : AlphaTrend < AlphaTrend[2] ? #80000B : AlphaTrend[1] > AlphaTrend[3] ? #00E60F : #80000B
+k1 = plot(y ? AlphaTrend : na, color=color.new(#0022FC, 0), linewidth=3)
+k2 = plot(y ? AlphaTrend[2] : na, color=color.new(#FC0400, 0), linewidth=3)
+
+fill(k1, k2, color=color1)
+
+buySignalk = ta.crossover(AlphaTrend, AlphaTrend[2])
+sellSignalk = ta.crossunder(AlphaTrend, AlphaTrend[2])
+
+
+K1 = ta.barssince(buySignalk)
+K2 = ta.barssince(sellSignalk)
+O1 = ta.barssince(buySignalk[1])
+O2 = ta.barssince(sellSignalk[1])
+
+plotshape(buySignalk and showsignalsk and O1 > K2 and y? AlphaTrend[2] * 0.9999 : na, title='BUY', text='BUY', location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(#0022FC, 0), textcolor=color.new(color.white, 0))
+
+plotshape(sellSignalk and showsignalsk and O2 > K1 and y? AlphaTrend[2] * 1.0001 : na, title='SELL', text='SELL', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.maroon, 0), textcolor=color.new(color.white, 0))
+
+
+// alertcondition(buySignalk and O1 > K2, title='Potential BUY Alarm', message='BUY SIGNAL!')
+// alertcondition(sellSignalk and O2 > K1, title='Potential SELL Alarm', message='SELL SIGNAL!')
+
+// alertcondition(buySignalk[1] and O1[1] > K2, title='Confirmed BUY Alarm', message='BUY SIGNAL APPROVED!')
+// alertcondition(sellSignalk[1] and O2[1] > K1, title='Confirmed SELL Alarm', message='SELL SIGNAL APPROVED!')
+
+
+
+// alertcondition(ta.cross(close, AlphaTrend), title='Price Cross Alert', message='Price - AlphaTrend Crossing!')
+// alertcondition(ta.crossover(low, AlphaTrend), title='Candle CrossOver Alarm', message='LAST BAR is ABOVE ALPHATREND')
+// alertcondition(ta.crossunder(high, AlphaTrend), title='Candle CrossUnder Alarm', message='LAST BAR is BELOW ALPHATREND!')
+
+// alertcondition(ta.cross(close[1], AlphaTrend[1]), title='Price Cross Alert After Bar Close', message='Price - AlphaTrend Crossing!')
+// alertcondition(ta.crossover(low[1], AlphaTrend[1]), title='Candle CrossOver Alarm After Bar Close', message='LAST BAR is ABOVE ALPHATREND!')
+// alertcondition(ta.crossunder(high[1], AlphaTrend[1]), title='Candle CrossUnder Alarm After Bar Close', message='LAST BAR is BELOW ALPHATREND!')
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+x = input(true,'---------------------Hull Suite by InSilico-------------------------')
+
+//INPUT
+//src = input(close, title='Source')
+modeSwitch = input.string('Hma', title='Hull Variation', options=['Hma', 'Thma', 'Ehma'])
+length = input(55, title='Length(180-200 for floating S/R , 55 for swing entry)')
+lengthMult = input(1.0, title='Length multiplier (Used to view higher timeframes with straight band)')
+
+useHtf = input(false, title='Show Hull MA from X timeframe? (good for scalping)')
+htf = input.timeframe('240', title='Higher timeframe')
+
+switchColor = input(true, 'Color Hull according to trend?')
+candleCol = input(false, title='Color candles based on Hull\'s Trend?')
+visualSwitch = input(true, title='Show as a Band?')
+thicknesSwitch = input(1, title='Line Thickness')
+transpSwitch = input.int(40, title='Band Transparency', step=5)
+
+//FUNCTIONS
+//HMA
+HMA(_src, _length) =>
+    ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+//EHMA    
+EHMA(_src, _length) =>
+    ta.ema(2 * ta.ema(_src, _length / 2) - ta.ema(_src, _length), math.round(math.sqrt(_length)))
+//THMA    
+THMA(_src, _length) =>
+    ta.wma(ta.wma(_src, _length / 3) * 3 - ta.wma(_src, _length / 2) - ta.wma(_src, _length), _length)
+
+//SWITCH
+Mode(modeSwitch, src, len) =>
+    modeSwitch == 'Hma' ? HMA(src, len) : modeSwitch == 'Ehma' ? EHMA(src, len) : modeSwitch == 'Thma' ? THMA(src, len / 2) : na
+
+//OUT
+_hull = Mode(modeSwitch, src, int(length * lengthMult))
+HULL = useHtf ? request.security(syminfo.ticker, htf, _hull) : _hull
+MHULL = HULL[0]
+SHULL = HULL[2]
+
+//COLOR
+hullColor = switchColor ? HULL > HULL[2] ? #00ff00 : #ff0000 : #ff9800
+
+//PLOT
+///< Frame
+Fi1 = plot(x ? MHULL : na, title='MHULL', color=hullColor, linewidth=thicknesSwitch, transp=50)
+Fi2 = plot(visualSwitch and x ? SHULL : na, title='SHULL', color=hullColor, linewidth=thicknesSwitch, transp=50)
+alertcondition(ta.crossover(MHULL, SHULL), title='Hull trending up.', message='Hull trending up.')
+alertcondition(ta.crossover(SHULL, MHULL), title='Hull trending down.', message='Hull trending down.')
+///< Ending Filler
+fill(Fi1, Fi2, title='Band Filler', color=hullColor, transp=transpSwitch)
+///BARCOLOR
+barcolor(color=candleCol and x ? switchColor ? hullColor : na : na)
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* BAR SETTINGS *//
+
+paint_bars = input(false, title = "Paint bars?", group = 'Bars Settings')
+catch_flat = input(false, title = "Try to catch flat?", group = 'Bars Settings')
+uptrend_colour = input.color(defval = color.green, title = "Uptrend colour", group = 'Bars Settings')
+downtrend_colour = input.color(defval = color.red, title = "Downtrend colour", group = 'Bars Settings')
+neutraltrend_colour = input.color(defval = color.gray, title = "Downtrend colour", tooltip = 'Note that this value is ignored if the setting to catch flat is switched off.', group = 'Bars Settings')
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+z = input(true,'-------------Traders Trend Dashboard----------------------')
+
+//* TABLE SETTINGS *//
+
+show_header = input(false, title = "Show header?", group = 'Table Settings')
+show_ema_value = input(false, title = "Show EMA value?", group = 'Table Settings')
+dashboard_position  = input.session("Middle right", "Position", ["Top right", "Bottom right", "Top left", "Bottom left", "Top center", "Bottom center", "Middle right"], group = 'Table Settings')
+text_size = input.session('Normal', "Size", options = ["Tiny", "Small", "Normal", "Large"], group = 'Table Settings')
+text_color = input(#d1d4dc, title = "Text colour", group = 'Table Settings')
+table_color = input(color.gray, title = "Border colour", group = 'Table Settings')
+uptrend_indicator = input("🟢", title = "Uptrend indicator", group = 'Table Settings')
+downtrend_indicator = input("🔴", title = "Downtrend indicator", group = 'Table Settings')
+neutraltrend_indicator = input("⚫️", title = "Neutraltrend indicator", tooltip = 'Note that this value is ignored if the setting to catch flat is switched off.', group = 'Table Settings')
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* EMA SETTINGS *//
+
+trend_identification_approach  = input.session("Direction of a single EMA", "Trend identification approach", ["Direction of a single EMA", "Comparison of the two EMAs"], group = 'EMA Settings')
+ema1_length = input.int(title = "EMA length", defval = 50, minval = 1, maxval = 800, group = 'EMA Settings')
+ema2_length = input.int(title = "Additional EMA length", defval = 200, minval = 20, maxval = 800, tooltip = 'Note that the single EMA trend identification approach ignores this value.', group = 'EMA Settings')
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* TIMEFRAME SETTINGS *//
+
+show_1m = input(true, title = 'Show 1m', group = 'Timeframe Settings')
+show_2m = input(false, title = 'Show 2m ', group = 'Timeframe Settings')
+show_3m = input(true, title = 'Show 3m ', group = 'Timeframe Settings')
+show_5m = input(true, title = 'Show 5m', group = 'Timeframe Settings')
+show_10m = input(false, title = 'Show 10m', group = 'Timeframe Settings')
+show_15m = input(true, title = 'Show 15m', group = 'Timeframe Settings')
+show_30m = input(false, title = 'Show 30m', group = 'Timeframe Settings')
+show_45m = input(false, title = 'Show 45m', group = 'Timeframe Settings')
+show_1h = input(true, title = 'Show 1h', group = 'Timeframe Settings')
+show_2h = input(false, title = 'Show 2h', group = 'Timeframe Settings')
+show_3h = input(false, title = 'Show 3h', group = 'Timeframe Settings')
+show_4h = input(true, title = 'Show 4h', group = 'Timeframe Settings')
+show_12h = input(false, title = 'Show 12h', group = 'Timeframe Settings')
+show_D = input(true, title = 'Show D', group = 'Timeframe Settings')
+show_3D = input(false, title = 'Show 3D', group = 'Timeframe Settings')
+show_W = input(false, title = 'Show W', group = 'Timeframe Settings')
+show_M = input(false, title = 'Show M', group = 'Timeframe Settings')
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* CALCULATION *//
+
+var table_position = dashboard_position == 'Top right' ? position.top_right :
+  dashboard_position == 'Top left' ? position.top_left :
+  dashboard_position == 'Top center' ? position.top_center :
+  dashboard_position == 'Bottom right' ? position.bottom_right :
+  dashboard_position == 'Bottom left' ? position.bottom_left :
+  dashboard_position == 'Bottom center' ? position.bottom_center :
+  dashboard_position == 'Middle right' ? position.middle_right :
+  dashboard_position == 'Middle left' ? position.middle_left : position.middle_right
+  
+var table_text_size = text_size == 'Normal' ? size.normal :
+  text_size == 'Large' ? size.large :
+  text_size == 'Tiny' ? size.tiny :
+  text_size == 'Small' ? size.small : size.normal
+
+var t = table.new(position = table_position,
+                  columns = 3,
+                  rows = 20,
+                  frame_color = table_color,
+                  frame_width = 2,
+                  border_color = table_color,
+                  border_width = 2)
+
+calc_smma(src, len) =>
+    var float smma = na
+    smma := na(smma) ? ta.sma(src, len) : (smma[1] * (len - 1) + src) / len
+    smma
+
+calc_zlema(src, len) =>
+    ema1 = ta.ema(src, len)
+    ema2 = ta.ema(ema1, len)
+    d = ema1 - ema2
+    ema1 + d
+
+check_impulse() =>
+    impulse_length = 34
+    impulse_strength = 9
+
+    hi = calc_smma(high, impulse_length)
+    lo = calc_smma(low, impulse_length)
+    mi = calc_zlema(hlc3, impulse_length)
+
+    md = (mi > hi) ? (mi - hi) : (mi < lo) ? (mi - lo) : 0
+    md_prev = (mi[1] > hi[1]) ? (mi[1] - hi[1]) : (mi[1] < lo[1]) ? (mi[1] - lo[1]) : 0
+
+    sb = ta.sma(md, impulse_strength)
+    sb_prev = ta.sma(md_prev, impulse_strength)
+
+    sh = md - sb
+    sh_prev = md_prev - sb_prev
+
+    is_impulse = sh != 0 and sh_prev != 0
+    is_impulse
+
+get_trend_status() =>
+    impulse = catch_flat ? check_impulse() : true
+    ema1_current_candle = ta.ema(close, ema1_length)
+    ema1_previous_candle = ema1_current_candle[1]
+    round = ema1_current_candle > 1000 ? 0 : ema1_current_candle > 10 ? 1 : ema1_current_candle > 0 ? 2 : ema1_current_candle > 0.1 ? 3 : 10
+    ema1_str = str.tostring(math.round(ema1_current_candle, round))
+    if (trend_identification_approach == "Direction of a single EMA")
+        ema1_previous_previous_candle = ema1_current_candle[2]
+        trend_current_candle = not impulse ? neutraltrend_indicator : ema1_current_candle > ema1_previous_candle ? uptrend_indicator : ema1_current_candle < ema1_previous_candle ? downtrend_indicator : neutraltrend_indicator
+        trend_previous_candle = not impulse ? neutraltrend_indicator : ema1_previous_candle > ema1_previous_previous_candle ? uptrend_indicator : ema1_previous_candle < ema1_previous_previous_candle ? downtrend_indicator : neutraltrend_indicator
+        [ema1_str, trend_current_candle, trend_previous_candle]
+    else
+        ema2_current_candle = ta.ema(close, ema2_length)
+        ema2_previous_candle = ema2_current_candle[1]
+        trend_current_candle = not impulse ? neutraltrend_indicator : ema1_current_candle > ema2_current_candle ? uptrend_indicator : ema1_current_candle < ema2_current_candle ? downtrend_indicator : neutraltrend_indicator
+        trend_previous_candle = not impulse ? neutraltrend_indicator : ema1_previous_candle > ema2_previous_candle ? uptrend_indicator : ema1_previous_candle < ema2_previous_candle ? downtrend_indicator : neutraltrend_indicator
+        [ema1_str, trend_current_candle, trend_previous_candle]
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* TABLE *//
+
+[ema_1m, trend_indicator_1m, _] = request.security(syminfo.tickerid, "1", get_trend_status())
+[ema_2m, trend_indicator_2m, _] = request.security(syminfo.tickerid, "2", get_trend_status())
+[ema_3m, trend_indicator_3m, _] = request.security(syminfo.tickerid, "3", get_trend_status())
+[ema_5m, trend_indicator_5m, _] = request.security(syminfo.tickerid, "5", get_trend_status())
+[ema_10m, trend_indicator_10m, _] = request.security(syminfo.tickerid, "10", get_trend_status())
+[ema_15m, trend_indicator_15m, _] = request.security(syminfo.tickerid, "15", get_trend_status())
+[ema_30m, trend_indicator_30m, _] = request.security(syminfo.tickerid, "30", get_trend_status())
+[ema_45m, trend_indicator_45m, _] = request.security(syminfo.tickerid, "45", get_trend_status())
+[ema_1h, trend_indicator_1h, _] = request.security(syminfo.tickerid, "60", get_trend_status())
+[ema_2h, trend_indicator_2h, _] = request.security(syminfo.tickerid, "120", get_trend_status())
+[ema_3h, trend_indicator_3h, _] = request.security(syminfo.tickerid, "180", get_trend_status())
+[ema_4h, trend_indicator_4h, _] = request.security(syminfo.tickerid, "240", get_trend_status())
+[ema_12h, trend_indicator_12h, _] = request.security(syminfo.tickerid, "720", get_trend_status())
+[ema_D, trend_indicator_D, _] = request.security(syminfo.tickerid, "D", get_trend_status())
+[ema_3D, trend_indicator_3D, _] = request.security(syminfo.tickerid, "3D", get_trend_status())
+[ema_W, trend_indicator_W, _] = request.security(syminfo.tickerid, "W", get_trend_status())
+[ema_M, trend_indicator_M, _] = request.security(syminfo.tickerid, "M", get_trend_status())
+
+if (barstate.islast) and z
+    if (show_header)
+        table.cell(t, 0, 0, "Timeframe", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 0, "Trend", text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 0, str.tostring(ema1_length) + " EMA", text_color = text_color, text_size = table_text_size)
+
+    if (show_1m)
+        table.cell(t, 0, 1, "1m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 1, trend_indicator_1m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 1, ema_1m, text_color = text_color, text_size = table_text_size)
+
+    if (show_2m)
+        table.cell(t, 0, 2, "2m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 2, trend_indicator_2m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 2, ema_2m, text_color = text_color, text_size = table_text_size)
+
+    if (show_3m)
+        table.cell(t, 0, 3, "3m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 3, trend_indicator_3m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 3, ema_3m, text_color = text_color, text_size = table_text_size)
+
+    if (show_5m)
+        table.cell(t, 0, 4, "5m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 4, trend_indicator_5m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 4, ema_5m, text_color = text_color, text_size = table_text_size)
+
+    if (show_10m)
+        table.cell(t, 0, 5, "10m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 5, trend_indicator_10m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 5, ema_10m, text_color = text_color, text_size = table_text_size)
+
+    if (show_15m)
+        table.cell(t, 0, 6, "15m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 6, trend_indicator_15m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 6, ema_15m, text_color = text_color, text_size = table_text_size)
+
+    if (show_30m)
+        table.cell(t, 0, 7, "30m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 7, trend_indicator_30m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 7, ema_30m, text_color = text_color, text_size = table_text_size)
+
+    if (show_45m)
+        table.cell(t, 0, 8, "45m", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 8, trend_indicator_45m, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 8, ema_45m, text_color = text_color, text_size = table_text_size)
+
+    if (show_1h)
+        table.cell(t, 0, 9, "1h", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 9, trend_indicator_1h, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 9, ema_1h, text_color = text_color, text_size = table_text_size)
+
+    if (show_2h)
+        table.cell(t, 0, 10, "2h", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 10, trend_indicator_2h, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 10, ema_2h, text_color = text_color, text_size = table_text_size)
+
+    if (show_3h)
+        table.cell(t, 0, 11, "3h", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 11, trend_indicator_3h, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 11, ema_3h, text_color = text_color, text_size = table_text_size)
+
+    if (show_4h)
+        table.cell(t, 0, 12, "4h", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 12, trend_indicator_4h, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 12, ema_4h, text_color = text_color, text_size = table_text_size)
+
+    if (show_12h)
+        table.cell(t, 0, 13, "12h", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 13, trend_indicator_12h, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 13, ema_12h, text_color = text_color, text_size = table_text_size)
+
+    if (show_D)
+        table.cell(t, 0, 14, "D", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 14, trend_indicator_D, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 14, ema_D, text_color = text_color, text_size = table_text_size)
+
+    if (show_3D)
+        table.cell(t, 0, 15, "3D", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 15, trend_indicator_3D, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 15, ema_3D, text_color = text_color, text_size = table_text_size)
+
+    if (show_W)
+        table.cell(t, 0, 16, "W", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 16, trend_indicator_W, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 16, ema_W, text_color = text_color, text_size = table_text_size)
+
+    if (show_M)
+        table.cell(t, 0, 17, "M", text_color = text_color, text_size = table_text_size)
+        table.cell(t, 1, 17, trend_indicator_M, text_color = text_color, text_size = table_text_size)
+        if (show_ema_value)
+            table.cell(t, 2, 17, ema_M, text_color = text_color, text_size = table_text_size)
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* BARS *//
+
+[_, current_trend_indicator_current_timeframe, previous_trend_indicator_current_timeframe] = get_trend_status()
+barcolor = current_trend_indicator_current_timeframe == uptrend_indicator ? uptrend_colour : current_trend_indicator_current_timeframe == downtrend_indicator ? downtrend_colour : neutraltrend_colour
+barcolor(z ?  barcolor : na, editable = false, display = paint_bars ? display.all : display.none)
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//* ALERTS *//
+
+alertcondition(current_trend_indicator_current_timeframe != previous_trend_indicator_current_timeframe, '0. Trend changed', '⏰ Trend changed on {{ticker}}:{{interval}}min')
+alertcondition(current_trend_indicator_current_timeframe != previous_trend_indicator_current_timeframe and current_trend_indicator_current_timeframe == uptrend_indicator, '1. Uptrend started', '🟢 Uptrend started on {{ticker}}:{{interval}}min')
+alertcondition(current_trend_indicator_current_timeframe != previous_trend_indicator_current_timeframe and current_trend_indicator_current_timeframe == downtrend_indicator, '2. Downtrend started', '🔴 Downtrend started on {{ticker}}:{{interval}}min')
+alertcondition(current_trend_indicator_current_timeframe != previous_trend_indicator_current_timeframe and current_trend_indicator_current_timeframe == neutraltrend_indicator, '3. Neutral trend started', '⚫️ Neutral trend started on {{ticker}}:{{interval}}min')
+alertcondition(trend_indicator_3D == trend_indicator_D and trend_indicator_D == trend_indicator_4h, '4. 3D, D, 4h aligned', '3D, D, 4h {{ticker}} trend alignment')
+alertcondition(trend_indicator_D == trend_indicator_4h and trend_indicator_4h == trend_indicator_1h, '5. D, 4h, 1h aligned', 'D, 4h, 1h {{ticker}} trend alignment')
+alertcondition(trend_indicator_4h == trend_indicator_1h and trend_indicator_1h == trend_indicator_15m, '6. 4h, 1h, 15m aligned', '4h, 1h, 15m {{ticker}} trend alignment')
+alertcondition(trend_indicator_1h == trend_indicator_15m and trend_indicator_15m == trend_indicator_5m, '7. 1h, 15m, 5m aligned', '1h, 15m, 5m {{ticker}} trend alignment')
+alertcondition(trend_indicator_15m == trend_indicator_5m and trend_indicator_5m == trend_indicator_3m, '8. 15m, 5m, 3m aligned', '15m, 5m, 3m {{ticker}} trend alignment')
+alertcondition(trend_indicator_5m == trend_indicator_3m and trend_indicator_3m == trend_indicator_1m, '9. 5m, 3m, 1m aligned', '5m, 3m, 1m {{ticker}}')
+
+
